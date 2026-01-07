@@ -3508,7 +3508,7 @@ R2 Score: -4.485799230636223</code></pre>
 <span id="cb135-20"><a href="#cb135-20" aria-hidden="true" tabindex="-1"></a>    pipe.fit(X)</span>
 <span id="cb135-21"><a href="#cb135-21" aria-hidden="true" tabindex="-1"></a>    inertia.append(pipe.named_steps[<span class="st">"kmeans"</span>].inertia_)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-<div class="cell" data-execution_count="140">
+<div class="cell" data-execution_count="173">
 <div class="sourceCode cell-code" id="cb136"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb136-1"><a href="#cb136-1" aria-hidden="true" tabindex="-1"></a>plt.figure(figsize<span class="op">=</span>(<span class="dv">6</span>,<span class="dv">4</span>))</span>
 <span id="cb136-2"><a href="#cb136-2" aria-hidden="true" tabindex="-1"></a>plt.plot(<span class="bu">range</span>(<span class="dv">2</span>,<span class="dv">11</span>), inertia, marker <span class="op">=</span> <span class="st">"*"</span>, linewidth <span class="op">=</span> <span class="fl">1.8</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-display">
@@ -3780,11 +3780,18 @@ R2 Score: -4.485799230636223</code></pre>
 </div>
 </div>
 </div>
-<div class="cell" data-execution_count="159">
-<div class="sourceCode cell-code" id="cb149"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb149-1"><a href="#cb149-1" aria-hidden="true" tabindex="-1"></a>plt.figure(figsize<span class="op">=</span>(<span class="dv">8</span>,<span class="dv">6</span>))</span>
-<span id="cb149-2"><a href="#cb149-2" aria-hidden="true" tabindex="-1"></a>sns.scatterplot(x <span class="op">=</span> <span class="st">"predicted_purchases"</span>, y <span class="op">=</span> <span class="st">"predicted_clv"</span>, hue <span class="op">=</span> <span class="st">"Labels"</span>, palette <span class="op">=</span> <span class="st">"Set1"</span>, data <span class="op">=</span> ggf_filter, alpha<span class="op">=</span><span class="fl">0.5</span>)</span>
-<span id="cb149-3"><a href="#cb149-3" aria-hidden="true" tabindex="-1"></a>plt.scatter(centers[:, <span class="dv">0</span>], centers[:, <span class="dv">2</span>], marker <span class="op">=</span> <span class="st">"x"</span>, color <span class="op">=</span> <span class="st">"k"</span>, alpha <span class="op">=</span> <span class="fl">0.8</span>)</span>
-<span id="cb149-4"><a href="#cb149-4" aria-hidden="true" tabindex="-1"></a>plt.legend(loc<span class="op">=</span><span class="st">'upper center'</span>, bbox_to_anchor<span class="op">=</span>(<span class="fl">0.5</span>, <span class="op">-</span><span class="fl">0.05</span>), shadow<span class="op">=</span><span class="va">True</span>, ncol<span class="op">=</span><span class="dv">2</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb149"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb149-1"><a href="#cb149-1" aria-hidden="true" tabindex="-1"></a>plt.figure(figsize<span class="op">=</span>(<span class="dv">8</span>, <span class="dv">6</span>))</span>
+<span id="cb149-2"><a href="#cb149-2" aria-hidden="true" tabindex="-1"></a>sns.scatterplot(</span>
+<span id="cb149-3"><a href="#cb149-3" aria-hidden="true" tabindex="-1"></a>    x<span class="op">=</span><span class="st">"predicted_purchases"</span>,</span>
+<span id="cb149-4"><a href="#cb149-4" aria-hidden="true" tabindex="-1"></a>    y<span class="op">=</span><span class="st">"predicted_clv"</span>,</span>
+<span id="cb149-5"><a href="#cb149-5" aria-hidden="true" tabindex="-1"></a>    hue<span class="op">=</span><span class="st">"Labels"</span>,</span>
+<span id="cb149-6"><a href="#cb149-6" aria-hidden="true" tabindex="-1"></a>    palette<span class="op">=</span><span class="st">"Set1"</span>,</span>
+<span id="cb149-7"><a href="#cb149-7" aria-hidden="true" tabindex="-1"></a>    data<span class="op">=</span>ggf_filter,</span>
+<span id="cb149-8"><a href="#cb149-8" aria-hidden="true" tabindex="-1"></a>    alpha<span class="op">=</span><span class="fl">0.5</span>,</span>
+<span id="cb149-9"><a href="#cb149-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb149-10"><a href="#cb149-10" aria-hidden="true" tabindex="-1"></a>plt.scatter(centers[:, <span class="dv">0</span>], centers[:, <span class="dv">2</span>], marker<span class="op">=</span><span class="st">"x"</span>, color<span class="op">=</span><span class="st">"k"</span>, alpha<span class="op">=</span><span class="fl">0.8</span>)</span>
+<span id="cb149-11"><a href="#cb149-11" aria-hidden="true" tabindex="-1"></a>plt.legend(loc<span class="op">=</span><span class="st">"upper center"</span>, bbox_to_anchor<span class="op">=</span>(<span class="fl">0.5</span>, <span class="op">-</span><span class="fl">0.05</span>), shadow<span class="op">=</span><span class="va">True</span>, ncol<span class="op">=</span><span class="dv">2</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-display">
 <pre><code>&lt;matplotlib.legend.Legend at 0x311853bc0&gt;</code></pre>
 </div>

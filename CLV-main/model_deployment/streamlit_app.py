@@ -1,200 +1,215 @@
-
-#adding necessary libraries
+# adding necessary libraries
 import streamlit as st
 import pandas as pd
-import lifetimes
-import math
 import numpy as np
-import xlrd
-import datetime
-np.random.seed(42)
-import altair as alt
-import time
 import warnings
+
 warnings.filterwarnings("ignore")
-from math import sqrt
-import matplotlib.pyplot as plt
-from sklearn.cluster import KMeans
-from lifetimes.plotting import plot_frequency_recency_matrix
-from lifetimes.plotting import plot_probability_alive_matrix
-from lifetimes.plotting import plot_period_transactions
-from lifetimes.utils import calibration_and_holdout_data
+
+import lifetimes
 from lifetimes import ParetoNBDFitter
-from lifetimes.plotting import plot_history_alive
-from sklearn.metrics import mean_squared_error, r2_score
+from lifetimes import GammaGammaFitter
 
-st.markdown(""" # Customer Lifetime Prediction App 👋
+from sklearn.cluster import KMeans
 
+import altair as alt
 
-Upload the RFM data and get your customer lifetime prediction on the fly !!! :smile:
+np.random.seed(42)
 
-	""")
+st.markdown("""
+# Customer Lifetime Prediction App
 
+Upload the RFM data and get your customer lifetime prediction on the fly.
+""")
 
-st.image("https://sarasanalytics.com/wp-content/uploads/2019/11/Customer-Lifetime-value-new-1.jpg", use_column_width = True)
+# --- Replace broken images with always-available placeholder images ---
+# Banner image
+st.image("https://picsum.photos/1200/350", use_container_width=True)
 
+# Sidebar logo
+st.sidebar.image("https://picsum.photos/240/160", width=120)
+st.sidebar.markdown("**Made by Felix Liu (demo)**")
 
-data = st.file_uploader("File Uploader")
+st.sidebar.title("Input Features")
 
-st.sidebar.image("http://logok.org/wp-content/uploads/2014/06/City-of-Melbourne-logo-M.png", width = 120)
-st.sidebar.markdown(""" **Made with :heart: by Mukul Singhal** """)
+days = st.sidebar.slider(
+    "Select The No. Of Days", min_value=1, max_value=365, step=1, value=30
+)
+profit = st.sidebar.slider(
+    "Select the Profit Margin", min_value=0.01, max_value=0.09, step=0.01, value=0.05
+)
 
-
-st.sidebar.title("Input Features :pencil:")
-
-
-st.sidebar.markdown("""
-
-[Example CSV Input File](https://raw.githubusercontent.com/mukulsinghal001/customer-lifetime-prediction-using-python/main/model_deployment/sample_file.csv)
-
-	""")
-
-days = st.sidebar.slider("Select The No. Of Days", min_value = 1, max_value = 365, step = 1, value = 30)
-
-profit = st.sidebar.slider("Select the Profit Margin", min_value = 0.01, max_value = 0.09, step = 0.01, value = 0.05)
-
-
-t_days = days
-
-profit_m = profit
-
-slider_data = {
-	"Days": t_days,
-	"Profit": profit_m
-}
-
-st.sidebar.markdown("""
-
-### Selected Input Features :page_with_curl:
-
-	""")
-
-features = pd.DataFrame(slider_data, index = [0])
-
+st.sidebar.markdown("### Selected Input Features")
+features = pd.DataFrame({"Days": [days], "Profit": [profit]})
 st.sidebar.write(features)
 
 st.sidebar.markdown("""
-
 Before uploading the file, please select the input features first.
 
-Also, please make sure the columns are in proper format. For reference you can download the [dummy data](https://raw.githubusercontent.com/mukulsinghal001/customer-lifetime-prediction-using-python/main/model_deployment/sample_file.csv).
+**Note:** Only use a CSV file with columns:
+- frequency
+- recency
+- T
+- monetary_value
+""")
 
-**Note:** Only Use "CSV" File.
 
-	""")
+# --- Provide a local, always-available sample dataset ---
+def make_sample_rfm(n_customers=300, seed=42):
+    rng = np.random.default_rng(seed)
+    customer_id = np.arange(10001, 10001 + n_customers)
+
+    # Create plausible RFM-like data
+    T = rng.integers(30, 365, size=n_customers).astype(
+        float
+    )  # observation window length (days)
+    frequency = rng.poisson(lam=3.0, size=n_customers).astype(float)
+    frequency = np.clip(frequency, 0, None)
+
+    # recency must be <= T; allow 0 (common edge case)
+    recency = rng.integers(0, 365, size=n_customers).astype(float)
+    recency = np.minimum(recency, T)
+
+    # monetary_value > 0 for Gamma-Gamma usage; create some small positive values
+    monetary_value = rng.gamma(shape=2.0, scale=50.0, size=n_customers).astype(float)
+    monetary_value = np.clip(monetary_value, 1.0, None)
+
+    df = pd.DataFrame(
+        {
+            "CustomerID": customer_id,
+            "frequency": frequency,
+            "recency": recency,
+            "T": T,
+            "monetary_value": monetary_value,
+        }
+    )
+
+    return df
+
+
+sample_df = make_sample_rfm(n_customers=300, seed=42)
+sample_csv = sample_df.to_csv(index=False).encode("utf-8")
+
+st.download_button(
+    label="Download Sample CSV (RFM format)",
+    data=sample_csv,
+    file_name="sample_rfm.csv",
+    mime="text/csv",
+)
+
+st.markdown("---")
+data = st.file_uploader("Upload your RFM CSV file", type=["csv"])
+
+
+def load_and_score(uploaded_file, day=days, profit_m=profit):
+    input_data = pd.read_csv(uploaded_file)
+
+    # Optional: if the CSV has an index column or extra first column, your old code used iloc[:,1:]
+    # Keep this only if you know the first col is junk. Otherwise comment it out.
+    # input_data = pd.DataFrame(input_data.iloc[:, 1:])
+
+    # Basic validation
+    required_cols = {"frequency", "recency", "T", "monetary_value"}
+    missing = required_cols - set(input_data.columns)
+    if missing:
+        st.error(f"Missing required columns: {sorted(list(missing))}")
+        return None
+
+    # Pareto/NBD model
+    pareto_model = ParetoNBDFitter(penalizer_coef=0.1)
+    pareto_model.fit(input_data["frequency"], input_data["recency"], input_data["T"])
+
+    input_data["p_alive"] = pareto_model.conditional_probability_alive(
+        input_data["frequency"], input_data["recency"], input_data["T"]
+    )
+    input_data["p_not_alive"] = 1 - input_data["p_alive"]
+
+    t = day
+    input_data["predicted_purchases"] = (
+        pareto_model.conditional_expected_number_of_purchases_up_to_time(
+            t, input_data["frequency"], input_data["recency"], input_data["T"]
+        )
+    )
+
+    # Gamma-Gamma model: requires frequency > 0 and monetary_value > 0
+    input_data = input_data.copy()
+    input_data = input_data[
+        (input_data["frequency"] > 0) & (input_data["monetary_value"] > 0)
+    ].reset_index(drop=True)
+
+    ggf_model = GammaGammaFitter(penalizer_coef=0.1)
+    ggf_model.fit(input_data["frequency"], input_data["monetary_value"])
+
+    input_data["expected_avg_sales_"] = ggf_model.conditional_expected_average_profit(
+        input_data["frequency"], input_data["monetary_value"]
+    )
+
+    input_data["predicted_clv"] = ggf_model.customer_lifetime_value(
+        pareto_model,
+        input_data["frequency"],
+        input_data["recency"],
+        input_data["T"],
+        input_data["monetary_value"],
+        time=t,
+        freq="D",
+        discount_rate=0.01,
+    )
+
+    input_data["profit_margin"] = input_data["predicted_clv"] * profit_m
+
+    # KMeans segmentation (handle NaN/inf defensively)
+    col = [
+        "predicted_purchases",
+        "expected_avg_sales_",
+        "predicted_clv",
+        "profit_margin",
+    ]
+    new_df = input_data[col].replace([np.inf, -np.inf], np.nan).dropna()
+
+    # Align input_data to the rows kept for clustering
+    input_data = input_data.loc[new_df.index].reset_index(drop=True)
+    new_df = new_df.reset_index(drop=True)
+
+    k_model = KMeans(n_clusters=4, init="k-means++", n_init=10, random_state=42)
+    k_model.fit(new_df)
+
+    labels = pd.Series(k_model.labels_, name="Labels")
+    input_data = pd.concat([input_data, labels], axis=1)
+
+    label_mapper = {0: "Low", 3: "Medium", 1: "High", 2: "V_High"}
+    input_data["Labels"] = input_data["Labels"].map(label_mapper)
+
+    return input_data
 
 
 if data is not None:
+    st.markdown("## Customer Lifetime Prediction Result")
+    result = load_and_score(data)
 
-	def load_data(data, day = t_days, profit = profit_m):
+    if result is not None:
+        st.dataframe(result, use_container_width=True)
 
-		input_data = pd.read_csv(data)
+        # Bar chart by label
+        fig = (
+            alt.Chart(result)
+            .mark_bar()
+            .encode(
+                y=alt.Y("Labels:N", sort="-x"),
+                x=alt.X("count(Labels):Q"),
+            )
+        )
+        text = fig.mark_text(align="left", baseline="middle", dx=3).encode(
+            text="count(Labels):Q"
+        )
+        st.altair_chart(fig + text, use_container_width=True)
 
-		input_data = pd.DataFrame(input_data.iloc[:, 1:])
-
-        #Pareto Model
-
-		pareto_model = lifetimes.ParetoNBDFitter(penalizer_coef = 0.1)
-		pareto_model.fit(input_data["frequency"],input_data["recency"],input_data["T"])
-		input_data["p_not_alive"] = 1-pareto_model.conditional_probability_alive(input_data["frequency"], input_data["recency"], input_data["T"])
-		input_data["p_alive"] = pareto_model.conditional_probability_alive(input_data["frequency"], input_data["recency"], input_data["T"])
-		t = days
-		input_data["predicted_purchases"] = pareto_model.conditional_expected_number_of_purchases_up_to_time(t, input_data["frequency"], input_data["recency"], input_data["T"])
-        
-
-        #Gamma Gamma Model
-
-		idx = input_data[(input_data["frequency"] <= 0.0)]
-		idx = idx.index
-		input_data = input_data.drop(idx, axis = 0)
-		m_idx = input_data[(input_data["monetary_value"] <= 0.0)].index
-		input_data = input_data.drop(m_idx, axis = 0)
-
-
-		input_data.reset_index().drop("index", axis = 1, inplace = True)
-
-		ggf_model =  lifetimes.GammaGammaFitter(penalizer_coef=0.1)
-
-		ggf_model.fit(input_data["frequency"], input_data["monetary_value"])
-
-		input_data["expected_avg_sales_"] = ggf_model.conditional_expected_average_profit(input_data["frequency"], input_data["monetary_value"])
-
-		input_data["predicted_clv"] = ggf_model.customer_lifetime_value(pareto_model, input_data["frequency"], input_data["recency"], input_data["T"], input_data["monetary_value"], time = 30, freq = 'D', discount_rate = 0.01)
-
-		input_data["profit_margin"] = input_data["predicted_clv"]*profit
-
-		input_data = input_data.reset_index().drop("index", axis = 1)
-
-		#K-Means Model
-
-		col = ["predicted_purchases", "expected_avg_sales_", "predicted_clv", "profit_margin"]
-
-		new_df = input_data[col]
-
-		k_model = KMeans(n_clusters = 4, init = "k-means++", n_jobs = -1, max_iter = 1000).fit(new_df)
-
-		labels = k_model.labels_
-
-		labels = pd.Series(labels, name = "Labels")
-
-		input_data = pd.concat([input_data, labels], axis = 1)
-
-		label_mapper = dict({0 : "Low", 3: "Medium", 1: "High", 2: "V_High"})
-
-		input_data["Labels"] = input_data["Labels"].map(label_mapper)
-
-		#saving the input data in the separate variable 
-
-		download = input_data
-
-		st.write(input_data)
-
-		#adding a count bar chart
-
-		fig = alt.Chart(input_data).mark_bar().encode(
-
-			y = "Labels:N",
-			x = "count(Labels):Q"
-
-			)
-
-		#adding a annotation to the chart
-
-		text = fig.mark_text(
-
-			align = "left",
-			baseline = "middle",
-			dx = 3
-
-			).encode(
-
-			text = "count(Labels):Q"
-
-			)
-
-
-		chart = (fig+text)
-
-		#showing the chart
-
-		st.altair_chart(chart, use_container_width = True)
-
-		#creating a button to download the result
-
-		if st.button("Download"):
-			st.write("Successfully Downloaded!!! Please Check Your Default Download Location...:smile:" )
-			return download.to_csv("customer_lifetime_prediction_result.csv")
-
-
-	#calling the function		
-
-	st.markdown("""
-
-		## Customer Lifetime Prediction Result :bar_chart:
-
-		""")
-
-	load_data(data)
-
+        # Download result
+        out_csv = result.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="Download Results CSV",
+            data=out_csv,
+            file_name="customer_lifetime_prediction_result.csv",
+            mime="text/csv",
+        )
 else:
-	st.text("Please Upload the CSV File")
+    st.info("Please upload a CSV file (or download the sample above to test).")
